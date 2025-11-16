@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  email                String                @unique
+  googleId             String?
+  image                String?
+  stripeCustomerId     String?
+  password             String?
+  role                 UserRole              @default(USER)
+  status               UserStatus            @default(ACTIVE)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  subscriptionPayments SubscriptionPayment[]
+
+  @@map("Users")
+}
+
+enum UserRole {
+  ADMIN
+  SUPER_ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+model SubscriptionPlan {
+  id              String       @id @default(auto()) @map("_id") @db.ObjectId
+  name            String       @unique
+  stripePriceId   String
+  stripeProductId String
+  description     String
+  price           Float
+  payoutRange     String
+  currency        String       @default("usd")
+  interval        BillingCycle @default(month)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  features            String[]
+  SubscriptionPayment SubscriptionPayment[]
+
+  @@map("SubscriptionPlans")
+}
+
+model SubscriptionPayment {
+  id                String                    @id @default(auto()) @map("_id") @db.ObjectId
+  amount            Float
+  paymentMethodId   String
+  previousPlanId    String?
+  paymentStatus     SubscriptionPaymentStatus @default(PENDING)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  isActive          Boolean                   @default(true)
+  cancelAtPeriodEnd Boolean                   @default(false)
+  canceledAt        DateTime? // when user canceled
+  endDate           DateTime? // when subscription access ends (from Stripe)
+  refundedAmount    Float? // for partial refunds
+  subscriptionId    String
+  userId            String                    @db.ObjectId
+  planId            String                    @db.ObjectId
+  stripePriceId     String
+  stripeProductId   String
+
+  // Relations
+  user User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("SubscriptionPayments")
+}
+
+enum SubscriptionPaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum BillingCycle {
+  month
+  year
+  week
+  day
+}
