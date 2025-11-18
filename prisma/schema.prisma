@@ -41,7 +41,6 @@ model SubscriptionPlan {
   name            String       @unique
   stripePriceId   String
   stripeProductId String
-  description     String
   price           Float
   payoutRange     String
   currency        String       @default("usd")

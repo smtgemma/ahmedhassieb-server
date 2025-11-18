@@ -11,8 +11,8 @@ const router = express.Router();
 
 router.post(
   "/",
-//   auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
-  validateRequest(SubscriptionPlanValidation.createSubscriptionPlanSchema),
+  //auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  // validateRequest(SubscriptionPlanValidation.createSubscriptionPlanSchema),
   SubscriptionPlanController.createSubscriptionPlan
 );
 
@@ -25,14 +25,14 @@ router.get("/:id", SubscriptionPlanController.getSingleSubscriptionPlan);
 
 router.put(
   "/:id",
-//   auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  //   auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateRequest(SubscriptionPlanValidation.updateSubscriptionPlanSchema),
   SubscriptionPlanController.updateSubscriptionPlan
 );
 
 router.delete(
   "/:id",
-//   auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  //   auth(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   SubscriptionPlanController.deleteSubscriptionPlan
 );
 

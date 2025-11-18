@@ -32,12 +32,11 @@ const createSubscriptionPlan = async (data: any) => {
         stripePriceId: createdPrice.id,
         stripeProductId: product.id,
         price: data.price,
-        description: data.description,
+        payoutRange: data.payoutRange,
         currency: data.currency,
         interval: data.interval,
         features: data.features,
       },
-    
     });
 
     return result;
@@ -68,7 +67,6 @@ const createSubscriptionPlan = async (data: any) => {
   }
 };
 
-
 //get my subscription
 const getMySubscriptionPlan = async (userId: string) => {
   const subscription = await prisma.subscriptionPayment.findFirst({
@@ -80,9 +78,7 @@ const getMySubscriptionPlan = async (userId: string) => {
       createdAt: "desc",
     },
     include: {
-      plan: {
-        include: { features: true },
-      },
+      plan: true,
     },
   });
 
@@ -118,14 +114,13 @@ const getMySubscriptionPlan = async (userId: string) => {
 
 //get all subscription
 const getAllSubscriptionPlans = async () => {
-  return prisma.subscriptionPlan.findMany({ include: { features: true } });
+  return prisma.subscriptionPlan.findMany({});
 };
 
 //get single subscription plan
 const getSingleSubscriptionPlan = async (id: string) => {
   const plan = await prisma.subscriptionPlan.findUnique({
     where: { id },
-    include: { features: true },
   });
 
   if (!plan)
@@ -142,7 +137,6 @@ const updateSubscriptionPlan = async (
   // Fetch existing plan
   const existingPlan = await prisma.subscriptionPlan.findUnique({
     where: { id },
-    include: { features: true },
   });
 
   if (!existingPlan) {
@@ -194,7 +188,7 @@ const updateSubscriptionPlan = async (
     // Handle feature updates (replace all features if passed)
     if (data.features) {
       updateData.features = {
-        deleteMany: {}, // remove all existing features
+        deleteMany: {}, 
         create: data.features.map((f: any) => ({
           name: f.name,
           description: f.description,
@@ -207,7 +201,6 @@ const updateSubscriptionPlan = async (
       return await tx.subscriptionPlan.update({
         where: { id },
         data: updateData,
-        include: { features: true },
       });
     });
 

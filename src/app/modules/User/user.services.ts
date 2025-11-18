@@ -8,25 +8,22 @@ import { Prisma, User, UserRole, UserStatus } from "@prisma/client";
 import { userSearchAbleFields } from "./user.costant";
 import config from "../../../config";
 import httpStatus from "http-status";
+import { StripeService } from "../Stripe/Stripe.service";
 
 // Create a new user in the database.
 const createUserIntoDb = async (payload: User) => {
-  const existingUser = await prisma.user.findFirst({
+  const existingUser = await prisma.user.findUnique({
     where: {
       email: payload.email,
     },
   });
 
   if (existingUser) {
-    if (existingUser.email === payload.email) {
-      throw new ApiError(
-        400,
-        `User with this email ${payload.email} already exists`
-      );
-    }
+    throw new ApiError(httpStatus.CONFLICT, "User already exists!");
   }
+
   const hashedPassword: string = await bcrypt.hash(
-    payload.password,
+    payload.password!,
     Number(config.bcrypt_salt_rounds)
   );
 
@@ -39,6 +36,25 @@ const createUserIntoDb = async (payload: User) => {
       httpStatus.INTERNAL_SERVER_ERROR,
       "Failed to create user profile"
     );
+
+  // 🔹 Create Stripe customer but don’t wait for it
+  (async () => {
+    try {
+      const stripeCustomer = await StripeService.createStripeCustomer({
+        email: result.email,
+        name: result.name,
+        userId: result.id,
+        role: result.role,
+      });
+
+      await prisma.user.update({
+        where: { id: result.id },
+        data: { stripeCustomerId: stripeCustomer.stripeCustomerId },
+      });
+    } catch (err) {
+      console.error("Failed to create Stripe customer:", err);
+    }
+  })();
 
   return result;
 };
