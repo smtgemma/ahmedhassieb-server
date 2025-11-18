@@ -38,18 +38,17 @@ enum UserStatus {
 }
 
 model SubscriptionPlan {
-  id              String       @id @default(auto()) @map("_id") @db.ObjectId
-  name            String       @unique
-  stripePriceId   String
-  stripeProductId String
-  price           Float
-  payoutRange     String
-  currency        String       @default("usd")
-  interval        BillingCycle @default(month)
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
+  id                  String                @id @default(auto()) @map("_id") @db.ObjectId
+  name                String                @unique
+  stripePriceId       String
+  stripeProductId     String
+  price               Float
+  payoutRange         String
+  currency            String                @default("usd")
+  interval            BillingCycle          @default(month)
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   features            String[]
   SubscriptionPayment SubscriptionPayment[]
   deals               Deal[]
@@ -101,18 +100,18 @@ enum BillingCycle {
 }
 
 model Deal {
-  id             String            @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String            @db.ObjectId
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activeDeals    Int
-  completedDeals Int
-  planId         String?           @db.ObjectId
-  plan           SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
-  payoutAmount   Float
-  payoutDate     DateTime
-  tokens         Int
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id             String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String           @db.ObjectId
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeDeals    Int              @default(0)
+  completedDeals Int              @default(0)
+  payoutAmount   Float            @default(0)
+  payoutDate     DateTime?
+  tokens         Int              @default(0)
+  planId         String[]         @default([]) @db.ObjectId
+  plans          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@map("Deals")
 }
