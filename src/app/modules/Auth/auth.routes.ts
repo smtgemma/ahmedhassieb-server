@@ -15,9 +15,15 @@ router.post(
   AuthController.loginUser
 );
 
+// user login route
+router.post(
+  "/google/login",
+  // validateRequest(UserValidation.UserLoginValidationSchema),
+  AuthController.googleLogin
+);
+
 // user logout route
 router.post("/logout", AuthController.logoutUser);
-
 
 router.put(
   "/change-password",
@@ -26,15 +32,8 @@ router.put(
   AuthController.changePassword
 );
 
+router.post("/forgot-password", AuthController.forgotPassword);
 
-router.post(
-  '/forgot-password',
-  AuthController.forgotPassword
-);
-
-router.post(
-  '/reset-password',
-  AuthController.resetPassword
-)
+router.post("/reset-password", AuthController.resetPassword);
 
 export const AuthRoutes = router;

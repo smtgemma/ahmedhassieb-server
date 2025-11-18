@@ -44,6 +44,8 @@ const loginUser = async (payload: { email: string; password: string }) => {
   return { token: accessToken };
 };
 
+
+
 // Google login
 const googleLogin = async (payload: {
   email: string;
@@ -205,7 +207,7 @@ const resetPassword = async (token: string, payload: { password: string }) => {
 
 export const AuthServices = {
   loginUser,
-
+  googleLogin,
   changePassword,
   forgotPassword,
   resetPassword,

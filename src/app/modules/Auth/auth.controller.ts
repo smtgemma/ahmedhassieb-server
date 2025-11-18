@@ -16,6 +16,17 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     data: result,
   });
 });
+// login user
+const googleLogin = catchAsync(async (req: Request, res: Response) => {
+  const result = await AuthServices.googleLogin(req.body);
+  res.cookie("token", result.token, { httpOnly: true });
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "User logged in successfully",
+    data: result,
+  });
+});
 
 // logout user
 const logoutUser = catchAsync(async (req: Request, res: Response) => {
@@ -80,8 +91,8 @@ const resetPassword = catchAsync(async (req: Request, res: Response) => {
 
 export const AuthController = {
   loginUser,
+  googleLogin,
   logoutUser,
-
   changePassword,
   forgotPassword,
   resetPassword,
