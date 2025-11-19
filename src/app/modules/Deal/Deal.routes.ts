@@ -15,3 +15,5 @@ router.put("/update-deal", DealController.updateDeal);
 router.put("/reset-deal", DealController.resetDeal);
 
 router.put("/send-email-to-user", DealController.sendEmailToUser);
+
+export const DealRoutes = router;

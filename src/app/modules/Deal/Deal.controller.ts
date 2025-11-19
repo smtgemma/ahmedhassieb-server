@@ -8,8 +8,7 @@ import { DealService } from "./Deal.service";
 
 //addNewDeal
 const addNewDeal = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user.id;
-  const { planId, dealId } = req.body;
+  const { planId, dealId, userId } = req.body;
   const result = await DealService.addNewDeal(userId, planId, dealId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -35,7 +34,7 @@ const getDealByUserId = catchAsync(async (req: Request, res: Response) => {
 const updateDeal = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user.id;
   const { planId, dealId } = req.body;
-  const result = await DealService.updateDeal(userId, planId, dealId,req.body);
+  const result = await DealService.updateDeal(userId, planId, dealId, req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -56,8 +55,7 @@ const resetDeal = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-
-// send email to user 
+// send email to user
 const sendEmailToUser = catchAsync(async (req: Request, res: Response) => {
   const userId = req.params.id;
   const result = await DealService.sendEmailToUser(userId);
@@ -74,5 +72,5 @@ export const DealController = {
   getDealByUserId,
   updateDeal,
   resetDeal,
-  sendEmailToUser
+  sendEmailToUser,
 };

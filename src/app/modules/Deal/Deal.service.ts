@@ -5,38 +5,50 @@ import httpStatus from "http-status";
 
 // Deal.service: Module file for the Deal.service functionality.
 const addNewDeal = async (userId: string, planId: string, dealId: string) => {
+  // check plan exists
   const isPlanExist = await prisma.subscriptionPlan.findUnique({
-    where: {
-      id: planId,
-    },
+    where: { id: planId },
   });
 
   if (!isPlanExist) {
     throw new ApiError(httpStatus.NOT_FOUND, "Plan not found");
   }
 
+  // check user exists
   const isUserExist = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
+    where: { id: userId },
   });
 
   if (!isUserExist) {
     throw new ApiError(httpStatus.NOT_FOUND, "User not found");
   }
 
-  const deal = await prisma.deal.findFirst({
-    where: {
-      userId: userId,
-    },
+  // get deal
+  const deal = await prisma.deal.findUnique({
+    where: { id: dealId },
   });
 
+  if (!deal) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
+  }
+
+  // planId is stored as array of strings
+  const alreadyAdded = deal.planId.includes(planId);
+
+  if (alreadyAdded) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "Plan already added to this deal"
+    );
+  }
+
+  // update deal with new planId
   const result = await prisma.deal.update({
-    where: {
-      id: dealId,
-    },
+    where: { id: dealId },
     data: {
-      planId: [...deal?.planId!, planId],
+      planId: {
+        push: planId, // best approach for String[] fields
+      },
     },
   });
 

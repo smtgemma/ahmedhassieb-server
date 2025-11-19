@@ -4,6 +4,7 @@ import { AuthRoutes } from "../modules/Auth/auth.routes";
 import { ImageRoutes } from "../modules/Image/Image.routes";
 import { SubscriptionPlanRoutes } from "../modules/SubscriptionPlan/SubscriptionPlan.routes";
 import { SubscriptionPaymentRoutes } from "../modules/SubscriptionPayment/SubscriptionPayment.routes";
+import { DealRoutes } from "../modules/Deal/Deal.routes";
 
 const router = express.Router();
 
@@ -27,6 +28,10 @@ const moduleRoutes = [
   {
     path: "/subscription-payments",
     route: SubscriptionPaymentRoutes,
+  },
+  {
+    path: "/deals",
+    route: DealRoutes,
   },
 ];
 
