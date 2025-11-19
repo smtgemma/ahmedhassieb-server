@@ -1,4 +1,5 @@
 import ApiError from "../../../errors/ApiErrors";
+import emailSender from "../../../shared/emailSernder";
 import prisma from "../../../shared/prisma";
 import httpStatus from "http-status";
 
@@ -125,10 +126,25 @@ const resetDeal = async (dealId: string) => {
   return result;
 };
 
+const sendEmailToUser = async (userId: string) => {
+  const result = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+  });
+
+  if (!result) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
+
+  await emailSender("Deal ", result.email, "test mail");
+};
+
 // Exporting the Deal.service module.
 export const DealService = {
   addNewDeal,
   getDealByUserId,
   updateDeal,
   resetDeal,
+  sendEmailToUser,
 };
