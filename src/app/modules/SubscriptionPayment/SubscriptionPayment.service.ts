@@ -66,6 +66,21 @@ const createSubscriptionPayment = async (payload: any, userId: string) => {
     },
   });
 
+  const deal = await prisma.deal.findFirst({
+    where: {
+      userId,
+    },
+  });
+
+  await prisma.deal.update({
+    where: {
+      id: deal?.id,
+    },
+    data: {
+      planId: [...deal?.planId!, isPlanExist.id],
+    },
+  });
+
   return subscriptionPayment;
 };
 
