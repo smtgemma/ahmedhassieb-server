@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post("/add-new-deal", DealController.addNewDeal);
 
-router.get("/get-deal-by-user-id", DealController.getDealByUserId);
+router.get("/:userId", DealController.getDealByUserId);
 
 router.put("/update-deal", DealController.updateDeal);
 

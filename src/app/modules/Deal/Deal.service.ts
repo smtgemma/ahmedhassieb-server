@@ -56,57 +56,52 @@ const addNewDeal = async (userId: string, planId: string, dealId: string) => {
 };
 
 const getDealByUserId = async (userId: string) => {
-  const result = await prisma.deal.findFirst({
-    where: {
-      userId: userId,
-    },
-    include: {
-      plans: true,
-    },
-  });
-  if (!result) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
-  }
-  return result;
-};
-
-const updateDeal = async (
-  userId: string,
-  planId: string,
-  dealId: string,
-  payload: any
-) => {
-  const isPlanExist = await prisma.subscriptionPlan.findUnique({
-    where: {
-      id: planId,
-    },
-  });
-
-  if (!isPlanExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Plan not found");
-  }
-
-  const isUserExist = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-  });
-
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
-
   const deal = await prisma.deal.findFirst({
     where: {
       userId: userId,
     },
   });
+  if (!deal) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
+  }
+  // Fetch all plans for the deal
+  const plans = await prisma.subscriptionPlan.findMany({
+    where: {
+      id: {
+        in: deal.planId, // array lookup
+      },
+    },
+  });
+
+  return {
+    ...deal,
+    plans, // add full plan objects
+  };
+};
+
+// update deal
+const updateDeal = async (payload: any) => {
+  const deal = await prisma.deal.findFirst({
+    where: {
+      userId: payload.userId,
+    },
+  });
+
+  if (!deal) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
+  }
 
   const result = await prisma.deal.update({
     where: {
-      id: dealId,
+      id: payload.dealId,
     },
-    data: payload,
+    data: {
+      activeDeals: payload.activeDeals || deal.activeDeals,
+      completedDeals: payload.completedDeals || deal.completedDeals,
+      payoutAmount: payload.payoutAmount || deal.payoutAmount,
+      payoutDate: payload.payoutDate || deal.payoutDate,
+      tokens: payload.tokens || deal.tokens,
+    },
   });
 
   return result;
@@ -132,6 +127,7 @@ const resetDeal = async (dealId: string) => {
       completedDeals: 0,
       payoutAmount: 0,
       tokens: 0,
+      payoutDate: null,
       planId: [],
     },
   });

@@ -20,7 +20,7 @@ const addNewDeal = catchAsync(async (req: Request, res: Response) => {
 
 //getDealByUserId
 const getDealByUserId = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.params.userId;
   const result = await DealService.getDealByUserId(userId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -32,9 +32,7 @@ const getDealByUserId = catchAsync(async (req: Request, res: Response) => {
 
 //updateDeal
 const updateDeal = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user.id;
-  const { planId, dealId } = req.body;
-  const result = await DealService.updateDeal(userId, planId, dealId, req.body);
+  const result = await DealService.updateDeal(req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -45,8 +43,7 @@ const updateDeal = catchAsync(async (req: Request, res: Response) => {
 
 //resetDeal
 const resetDeal = catchAsync(async (req: Request, res: Response) => {
-  const dealId = req.params.id;
-  const result = await DealService.resetDeal(dealId);
+  const result = await DealService.resetDeal(req.body.dealId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -57,7 +54,7 @@ const resetDeal = catchAsync(async (req: Request, res: Response) => {
 
 // send email to user
 const sendEmailToUser = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.params.id;
+  const userId = req.body.userId;
   const result = await DealService.sendEmailToUser(userId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
