@@ -145,6 +145,14 @@ const getMyProfile = async (userId: string) => {
     where: {
       id: userId,
     },
+    include: {
+      deals: true,
+      subscriptionPayments: {
+        include: {
+          plan: true,
+        },
+      },
+    },
   });
 
   return userProfile;
