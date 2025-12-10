@@ -1,8 +1,9 @@
 import { Server } from "http";
 import config from "./config";
-
+import cron from "node-cron";
 
 import app from "./app";
+import { runRefundCronJob } from "./app/modules/Deal/Deal.service";
 
 let server: Server;
 
@@ -14,6 +15,16 @@ async function startServer() {
 
 async function main() {
   await startServer();
+
+  // --------------------------------------------
+  // 🕒 Start REFUND Cron Job (runs every midnight)
+  // --------------------------------------------
+  cron.schedule("0 0 * * *", async () => {
+    console.log("⏳ Running Daily Refund Cron Job...");
+    await runRefundCronJob();
+  });
+
+  console.log("✅ Refund cron scheduled successfully.");
   const exitHandler = () => {
     if (server) {
       server.close(() => {
@@ -23,7 +34,6 @@ async function main() {
       process.exit(1);
     }
   };
-
 
   process.on("uncaughtException", (error) => {
     console.log("Uncaught Exception: ", error);

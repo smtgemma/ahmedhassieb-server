@@ -9,79 +9,161 @@ import httpStatus from "http-status";
 import { subscriptionPaymentSearchAbleFields } from "./SubscriptionPayment.constant";
 
 const createSubscriptionPayment = async (payload: any, userId: string) => {
-  const isPlanExist = await prisma.subscriptionPlan.findUnique({
-    where: {
-      id: payload.planId,
-    },
+  // -------------------------------
+  // 1. VALIDATE USER & PLAN
+  // -------------------------------
+  const plan = await prisma.subscriptionPlan.findUnique({
+    where: { id: payload.planId },
   });
 
-  if (!isPlanExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "Plan not found");
-  }
+  if (!plan) throw new ApiError(httpStatus.NOT_FOUND, "Plan not found");
 
-  const isUserExist = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
   });
 
-  if (!isUserExist) {
-    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
-  }
+  if (!user) throw new ApiError(httpStatus.NOT_FOUND, "User not found");
 
-  // Attach payment method to customer
+  // -------------------------------
+  // 2. CALCULATE TOTAL AVAILABLE TOKENS
+  // -------------------------------
+  const totalTokensData = await prisma.userPackage.aggregate({
+    _sum: { tokens: true },
+    where: { userId },
+  });
+
+  const totalTokens = totalTokensData._sum.tokens || 0;
+
+  // -------------------------------
+  // 3. TOKEN DISCOUNT LOGIC
+  // -------------------------------
+  const price = plan.price;
+  const discount = Math.min(totalTokens, price); // $1 per token
+  const finalPrice = price - discount;
+
+  console.log(
+    `Tokens Used: ${discount}, Final First Month Price: ${finalPrice}`
+  );
+
+  // -------------------------------
+  // 4. ATTACH PAYMENT METHOD TO CUSTOMER
+  // -------------------------------
   await StripeService.attachPaymentMethodToCustomer(
     payload.paymentMethodId,
-    isUserExist.stripeCustomerId!
+    user.stripeCustomerId!
   );
 
-  // Create Stripe subscription
-  const subscription = await StripeService.createStripeSubscription(
-    isUserExist.stripeCustomerId!,
-    isPlanExist.stripePriceId,
-    userId,
-    isPlanExist.id,
-    isPlanExist.name,
-    isPlanExist.price,
-    payload.paymentMethodId
-  );
+  // -------------------------------
+  // 5. CREATE STRIPE SUBSCRIPTION (WITH DISCOUNTED FIRST PAYMENT)
+  // -------------------------------
+  const stripeSubscription =
+    await StripeService.createStripeSubscriptionWithDiscount({
+      customerId: user.stripeCustomerId!,
+      priceId: plan.stripePriceId,
+      paymentMethodId: payload.paymentMethodId,
+      firstPaymentAmount: finalPrice * 100, // Stripe requires cents
+      userId,
+      planId: plan.id,
+      planName: plan.name,
+    });
 
-  if (!subscription) {
+  if (!stripeSubscription)
     throw new ApiError(
       httpStatus.INTERNAL_SERVER_ERROR,
       "Failed to create Stripe subscription"
     );
+
+  // -------------------------------
+  // 6. DEDUCT USED TOKENS FROM USERPACKAGES (FIFO)
+  // -------------------------------
+  let remainingTokensToDeduct = discount;
+
+  if (remainingTokensToDeduct > 0) {
+    const packages = await prisma.userPackage.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" }, // oldest first
+    });
+
+    for (const pkg of packages) {
+      if (remainingTokensToDeduct <= 0) break;
+
+      const deduct = Math.min(pkg.tokens, remainingTokensToDeduct);
+
+      await prisma.userPackage.update({
+        where: { id: pkg.id },
+        data: { tokens: pkg.tokens - deduct },
+      });
+
+      remainingTokensToDeduct -= deduct;
+    }
   }
 
+  // -------------------------------
+  // 7. CREATE BUSINESS PACKAGE ENTRY
+  // -------------------------------
+  const userPackage = await prisma.userPackage.create({
+    data: {
+      userId,
+      planId: plan.id,
+      stripeSubscriptionId: stripeSubscription.id,
+      status: "ACTIVE",
+
+      startDate: new Date(),
+      paidMonths: 1,
+      remainingMonths: 11,
+
+      nextBillingDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
+      payoutAmount: 0,
+      tokens: 0, // new package starts with zero tokens
+    },
+  });
+
+  // -------------------------------
+  // 8. CREATE DEAL ROW (PER PACKAGE)
+  // -------------------------------
+  await prisma.deal.create({
+    data: {
+      userPackageId: userPackage.id,
+      planId: plan.id,
+    },
+  });
+
+  // -------------------------------
+  // 9. CREATE SUBSCRIPTION PAYMENT RECORD
+  // -------------------------------
   const subscriptionPayment = await prisma.subscriptionPayment.create({
     data: {
-      amount: isPlanExist.price,
+      amount: finalPrice,
       paymentMethodId: payload.paymentMethodId,
       paymentStatus: "COMPLETED",
-      subscriptionId: subscription.id,
+      subscriptionId: stripeSubscription.id,
+
       userId,
-      planId: isPlanExist.id,
-      stripePriceId: isPlanExist.stripePriceId,
-      stripeProductId: isPlanExist.stripeProductId,
+      planId: plan.id,
+      stripePriceId: plan.stripePriceId,
+      stripeProductId: plan.stripeProductId,
     },
   });
 
-  const deal = await prisma.deal.findFirst({
-    where: {
-      userId,
-    },
-  });
-
-  await prisma.deal.update({
-    where: {
-      id: deal?.id,
-    },
+  // -------------------------------
+  // 10. CREATE BILLING LOG ENTRY (MONTH 1, DISCOUNTED)
+  // -------------------------------
+  await prisma.billingLog.create({
     data: {
-      planId: [...deal?.planId!, isPlanExist.id],
+      userPackageId: userPackage.id,
+      amount: finalPrice, // discounted amount
+      monthNumber: 1,
+      status: "SUCCESS",
     },
   });
 
-  return subscriptionPayment;
+  return {
+    message: "Subscription successful",
+    tokensApplied: discount,
+    finalPrice,
+    subscriptionPayment,
+    userPackage,
+  };
 };
 
 //cancel stripe subscription

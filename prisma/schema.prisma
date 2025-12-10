@@ -22,7 +22,8 @@ model User {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   subscriptionPayments SubscriptionPayment[]
-  deals                Deal[]
+  deals                UserDeal[]
+  userPackages         UserPackage[]
 
   @@map("Users")
 }
@@ -54,6 +55,7 @@ model SubscriptionPlan {
   features            String[]
   SubscriptionPayment SubscriptionPayment[]
   deals               Deal[]
+  userPackages        UserPackage[]
 
   @@map("SubscriptionPlans")
 }
@@ -101,19 +103,148 @@ enum BillingCycle {
   day
 }
 
+
+model UserPackage {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String             @db.ObjectId
+  planId               String             @db.ObjectId
+
+  stripeSubscriptionId String?
+
+  status               SubscriptionStatus @default(ACTIVE)
+
+  startDate            DateTime           @default(now())
+  nextBillingDate      DateTime?
+  paidMonths           Int                @default(0)
+  remainingMonths      Int                @default(12)
+
+  activeDeals          Int                @default(0)
+  completedDeals       Int                @default(0)
+  tokens               Float              @default(0)
+  payoutAmount         Float              @default(0)
+  payoutDate           DateTime?
+
+  refundStopped        Boolean            @default(false)
+  billingStopped       Boolean            @default(false)
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan            SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  refunds         RefundLog[]
+  billingLogs     BillingLog[]
+  payoutRequests  PayoutRequest[]
+  deals           Deal[]
+}
+
+
 model Deal {
-  id             String           @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String           @db.ObjectId
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activeDeals    Int              @default(0)
-  completedDeals Int              @default(0)
-  payoutAmount   Float            @default(0)
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  userPackageId  String        @db.ObjectId
+  planId         String        @db.ObjectId
+
+  activeDeals    Int           @default(0)
+  completedDeals Int           @default(0)
+  tokens         Float         @default(0)
+  payoutAmount   Float         @default(0)
   payoutDate     DateTime?
-  tokens         Int              @default(0)
-  planId         String[]         @default([]) @db.ObjectId
-  plans          SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  userPackage    UserPackage   @relation(fields: [userPackageId], references: [id])
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  users           UserDeal[]
 
   @@map("Deals")
+}
+
+model UserDeal {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  dealId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealId])
+  @@map("UserDeals")
+}
+
+
+//
+// --------------- REFUND LOG (90/180/270/360 days) ---------------
+//
+
+model RefundLog {
+  id             String           @id @default(auto()) @map("_id") @db.ObjectId
+  userPackageId  String           @db.ObjectId
+  milestone      RefundMilestone
+  percent        Float
+  amount         Float
+  createdAt      DateTime         @default(now())
+
+  userPackage    UserPackage      @relation(fields: [userPackageId], references: [id])
+}
+
+//
+// --------------- BILLING LOG (Stripe invoices) ---------------
+//
+
+model BillingLog {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  userPackageId   String         @db.ObjectId
+  stripeInvoiceId String?
+
+  amount          Float
+  monthNumber     Int
+  status          BillingStatus
+  createdAt       DateTime       @default(now())
+
+  userPackage     UserPackage    @relation(fields: [userPackageId], references: [id])
+}
+
+//
+// --------------- PAYOUT REQUEST (User withdraws) ---------------
+//
+
+model PayoutRequest {
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  userPackageId  String      @db.ObjectId
+
+  bankName       String?        // NOT USED for crypto
+  accountNumber  String?        // NOT USED for crypto
+  walletAddress  String?
+  extraInfo      String?
+
+  approved       Boolean      @default(false)
+  processedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  userPackage    UserPackage  @relation(fields: [userPackageId], references: [id])
+}
+
+
+
+
+enum SubscriptionStatus {
+  ACTIVE
+  COMPLETED
+  REMOVED
+  PAYOUT_PENDING
+  PAYOUT_COMPLETED
+}
+
+enum BillingStatus {
+  SUCCESS
+  FAILED
+}
+
+enum RefundMilestone {
+  DAY_90
+  DAY_180
+  DAY_270
+  DAY_360
 }

@@ -37,11 +37,11 @@ const createUserIntoDb = async (payload: User) => {
       "Failed to create user profile"
     );
 
-  const deal = await prisma.deal.create({
-    data: {
-      userId: result.id,
-    },
-  });
+  // const deal = await prisma.deal.create({
+  //   data: {
+  //     userId: result.id,
+  //   },
+  // });
 
   // 🔹 Create Stripe customer but don’t wait for it
   (async () => {

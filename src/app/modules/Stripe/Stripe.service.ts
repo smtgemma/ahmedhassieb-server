@@ -547,6 +547,89 @@ const transferHostEarnings = async (transferData: ITransferAmount) => {
 };
 
 
+export const createStripeSubscriptionWithDiscount = async ({
+  customerId,
+  priceId,
+  paymentMethodId,
+  firstPaymentAmount,
+  userId,
+  planId,
+  planName,
+}: {
+  customerId: string;
+  priceId: string;
+  paymentMethodId: string;
+  firstPaymentAmount: number; // in cents
+  userId: string;
+  planId: string;
+  planName: string;
+}) => {
+  try {
+    // -------------------------------------------------------
+    // 1. SET DEFAULT PAYMENT METHOD FOR CUSTOMER
+    // -------------------------------------------------------
+    await stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // -------------------------------------------------------
+    // 2. GET ORIGINAL MONTHLY AMOUNT FROM PRICE ID
+    // -------------------------------------------------------
+    const price = await stripe.prices.retrieve(priceId);
+
+    if (!price.unit_amount) {
+      throw new Error("Invalid price: Missing unit_amount");
+    }
+
+    const originalMonthlyAmount = price.unit_amount; // in cents
+
+    // -------------------------------------------------------
+    // 3. CALCULATE DISCOUNT
+    // -------------------------------------------------------
+    const discountAmount = originalMonthlyAmount - firstPaymentAmount;
+
+    // Note: discountAmount must be **negative** for Stripe invoice item
+    // Example: user saved $40 → discountAmount = -4000 (cents)
+    const negativeDiscount = discountAmount > 0 ? -discountAmount : 0;
+
+    // -------------------------------------------------------
+    // 4. CREATE NEGATIVE INVOICE ITEM (DISCOUNT FOR 1ST MONTH)
+    // -------------------------------------------------------
+    if (negativeDiscount < 0) {
+      await stripe.invoiceItems.create({
+        customer: customerId,
+        amount: negativeDiscount, // MUST be negative
+        currency: price.currency,
+        description: `Token discount for first payment of ${planName}`,
+      });
+    }
+
+    // -------------------------------------------------------
+    // 5. CREATE SUBSCRIPTION (Monthly billing starts normally)
+    // -------------------------------------------------------
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId }],
+      expand: ["latest_invoice.payment_intent"],
+      metadata: {
+        userId,
+        planId,
+        planName,
+        firstPayment: firstPaymentAmount / 100,
+      },
+    });
+
+    return subscription;
+  } catch (error: any) {
+    console.error("Stripe Subscription Error:", error);
+    throw new Error(error.message);
+  }
+};
+
+
+
 
 export const StripeService = {
   createStripeCustomer,
@@ -568,5 +651,6 @@ export const StripeService = {
   verifyPaymentMethodOwnership,
   createHostStripeAccount,
   transferHostEarnings,
+  createStripeSubscriptionWithDiscount
 
 };

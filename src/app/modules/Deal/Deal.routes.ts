@@ -3,8 +3,16 @@ import express from "express";
 
 import { DealController } from "./Deal.controller";
 import validateRequest from "../../middlewares/validateRequest";
+import auth from "../../middlewares/auth";
 
 const router = express.Router();
+
+//getUserDashboard
+router.get(
+  "/user-dashboard",
+  auth(),
+  DealController.getUserDashboard
+);
 
 router.post("/add-new-deal", DealController.addNewDeal);
 

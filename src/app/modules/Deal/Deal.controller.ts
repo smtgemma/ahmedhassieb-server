@@ -64,10 +64,23 @@ const sendEmailToUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// getUserDashboard;
+const getUserDashboard = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  const result = await DealService.getUserDashboard( userId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "User dashboard retrieved successfully!",
+    data: result,
+  });
+});
+
 export const DealController = {
   addNewDeal,
   getDealByUserId,
   updateDeal,
   resetDeal,
   sendEmailToUser,
+  getUserDashboard,
 };
