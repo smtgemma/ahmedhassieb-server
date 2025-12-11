@@ -200,6 +200,7 @@ const getUserDashboard = async (userId: string) => {
   return { packages: result };
 };
 
+// update dashboard
 const updateDashboard = async (userPackageId: string, payload: any) => {
   // 1. Fetch the package
   const userPackage = await prisma.userPackage.findUnique({
@@ -286,6 +287,7 @@ const updateDashboard = async (userPackageId: string, payload: any) => {
   };
 };
 
+// assignPackageToUser
 const assignPackageToUser = async (
   userId: string,
   planId: string,
@@ -335,6 +337,7 @@ const assignPackageToUser = async (
   };
 };
 
+//!
 const removePackageFromUser = async (userPackageId: string) => {
   const userPackage = await prisma.userPackage.findUnique({
     where: { id: userPackageId },
@@ -621,7 +624,7 @@ const createRemainingPaymentInvoice = async (
   };
 
 
-   const adminApprovePayout = async (payoutRequestId: string) => {
+const adminApprovePayout = async (payoutRequestId: string) => {
      // 1. Fetch payout request
      const payout = await prisma.payoutRequest.findUnique({
        where: { id: payoutRequestId },
@@ -698,4 +701,7 @@ export const DealService = {
   resetDeal,
   sendEmailToUser,
   getUserDashboard,
+  updateDashboard,
+  assignPackageToUser,
+  removePackageFromUser,
 };

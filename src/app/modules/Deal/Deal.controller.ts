@@ -67,11 +67,48 @@ const sendEmailToUser = catchAsync(async (req: Request, res: Response) => {
 // getUserDashboard;
 const getUserDashboard = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user.id;
-  const result = await DealService.getUserDashboard( userId);
+  const result = await DealService.getUserDashboard(userId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
     message: "User dashboard retrieved successfully!",
+    data: result,
+  });
+});
+
+//updateDashboard
+const updateDashboard = catchAsync(async (req: Request, res: Response) => {
+  const userPackageId = req.params.userPackageId;
+  const result = await DealService.updateDashboard(userPackageId, req.body);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Dashboard updated successfully!",
+    data: result,
+  });
+});
+
+//assignPackageToUser
+const assignPackageToUser = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.body.userId;
+  const planId = req.body.planId;
+  const result = await DealService.assignPackageToUser(userId, planId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Package assigned successfully!",
+    data: result,
+  });
+});
+
+//removePackageFromUser
+const removePackageFromUser = catchAsync(async (req: Request, res: Response) => {
+  const userPackageId = req.params.userPackageId;
+  const result = await DealService.removePackageFromUser(userPackageId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Package removed successfully!",
     data: result,
   });
 });
@@ -83,4 +120,7 @@ export const DealController = {
   resetDeal,
   sendEmailToUser,
   getUserDashboard,
+  updateDashboard,
+  assignPackageToUser,
+  removePackageFromUser,
 };

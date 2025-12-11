@@ -8,15 +8,25 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 
 //getUserDashboard
-router.get(
-  "/user-dashboard",
-  auth(),
-  DealController.getUserDashboard
+router.get("/user-dashboard", auth(), DealController.getUserDashboard);
+
+//updateDashboard
+router.put("/dashboard/:userPackageId", DealController.updateDashboard);
+
+//assignPackageToUser
+router.post("/assign-package-to-user", DealController.assignPackageToUser);
+
+//removePackageFromUser
+router.delete(
+  "/remove-package-from-user/:userPackageId",
+  DealController.removePackageFromUser
 );
+
 
 router.post("/add-new-deal", DealController.addNewDeal);
 
 router.get("/:userId", DealController.getDealByUserId);
+
 
 router.put("/update-deal", DealController.updateDeal);
 
