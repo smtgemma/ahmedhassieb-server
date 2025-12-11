@@ -102,16 +102,35 @@ const assignPackageToUser = catchAsync(async (req: Request, res: Response) => {
 });
 
 //removePackageFromUser
-const removePackageFromUser = catchAsync(async (req: Request, res: Response) => {
-  const userPackageId = req.params.userPackageId;
-  const result = await DealService.removePackageFromUser(userPackageId);
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Package removed successfully!",
-    data: result,
-  });
-});
+const removePackageFromUser = catchAsync(
+  async (req: Request, res: Response) => {
+    const userPackageId = req.params.userPackageId;
+    const result = await DealService.removePackageFromUser(userPackageId);
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Package removed successfully!",
+      data: result,
+    });
+  }
+);
+
+//createRemainingPaymentInvoice
+const createRemainingPaymentInvoice = catchAsync(
+  async (req: Request, res: Response) => {
+    const userPackageId = req.body.userPackageId;
+    const result = await DealService.createRemainingPaymentInvoice(
+      userPackageId,
+      req.user.id
+    );
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Invoice created successfully!",
+      data: result,
+    });
+  }
+);
 
 export const DealController = {
   addNewDeal,
@@ -123,4 +142,5 @@ export const DealController = {
   updateDashboard,
   assignPackageToUser,
   removePackageFromUser,
+  createRemainingPaymentInvoice,
 };

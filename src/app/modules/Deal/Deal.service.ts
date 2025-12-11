@@ -337,7 +337,7 @@ const assignPackageToUser = async (
   };
 };
 
-//!
+// removePackageFromUser
 const removePackageFromUser = async (userPackageId: string) => {
   const userPackage = await prisma.userPackage.findUnique({
     where: { id: userPackageId },
@@ -413,7 +413,7 @@ const calculateRemaining = async (userPackageId: string, userId: string) => {
   };
 };
 
-// 2. CREATE REMAINING PAYMENT INVOICE
+//! 2. CREATE REMAINING PAYMENT INVOICE
 const createRemainingPaymentInvoice = async (
   userPackageId: string,
   userId: string
@@ -427,7 +427,7 @@ const createRemainingPaymentInvoice = async (
   if (pkg.userId !== userId)
     throw new ApiError(httpStatus.FORBIDDEN, "Unauthorized");
 
-  const monthlyPrice = pkg.plan.price / 12;
+  const monthlyPrice = pkg.plan.price ;
   const remainingAmount = monthlyPrice * pkg.remainingMonths;
 
   const tokens = pkg.tokens;
@@ -471,11 +471,11 @@ const createRemainingPaymentInvoice = async (
   });
 
   return {
+    message: "Invoice created. Stripe will auto-charge.",
     invoiceId: invoice.id,
     remainingAmount,
     tokensUsed: discount,
     finalAmount,
-    message: "Invoice created. Stripe will auto-charge.",
   };
 };
 
@@ -704,4 +704,5 @@ export const DealService = {
   updateDashboard,
   assignPackageToUser,
   removePackageFromUser,
+  createRemainingPaymentInvoice,
 };

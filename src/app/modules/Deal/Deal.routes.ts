@@ -22,11 +22,16 @@ router.delete(
   DealController.removePackageFromUser
 );
 
+//createRemainingPaymentInvoice
+router.post(
+  "/create-remaining-payment-invoice",
+  auth(),
+  DealController.createRemainingPaymentInvoice
+);
 
 router.post("/add-new-deal", DealController.addNewDeal);
 
 router.get("/:userId", DealController.getDealByUserId);
-
 
 router.put("/update-deal", DealController.updateDeal);
 
