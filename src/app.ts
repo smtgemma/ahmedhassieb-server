@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import GlobalErrorHandler from "./app/middlewares/globalErrorHandler";
 import router from "./app/routes";
+import { stripeWebhookHandler } from "./app/modules/Stripe/Stripe.service";
 
 
 
@@ -15,6 +16,14 @@ export const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
+
+
+// ⚠️ STRIPE WEBHOOK MUST GO BEFORE express.json()
+app.post(
+  "/api/v1/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler
+);
 
 // Middleware setup
 app.use(cors(corsOptions));

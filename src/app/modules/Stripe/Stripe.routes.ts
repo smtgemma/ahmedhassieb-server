@@ -4,6 +4,7 @@ import auth from "../../middlewares/auth";
 import { UserRole } from "@prisma/client";
 import validateRequest from "../../middlewares/validateRequest";
 import { transferEarningsZodSchema } from "./Stripe.validation";
+import { stripeWebhookHandler } from "./Stripe.service";
 
 const router = express.Router();
 
@@ -47,6 +48,13 @@ router.post(
   auth(UserRole.ADMIN),
   validateRequest(transferEarningsZodSchema),
   StripeController.transferHostEarnings
+);
+
+// IMPORTANT: raw body required
+router.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler
 );
 
 export const StripeRoutes = router;

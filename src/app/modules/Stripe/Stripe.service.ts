@@ -4,7 +4,8 @@ import ApiError from "../../../errors/ApiErrors";
 import httpStatus from "http-status";
 import { HostData, ITransferAmount } from "./Stripe.interface";
 import stripe from "../../../shared/stripe";
-
+import prisma from "../../../shared/prisma";
+import emailSender from "../../../shared/emailSernder";
 
 // Create Stripe customer
 const createStripeCustomer = async (userData: {
@@ -156,7 +157,9 @@ const deleteStripeProduct = async (productId: string) => {
     }
 
     // 3. Archive the product
-    const archivedProduct = await stripe.products.update(productId, { active: false });
+    const archivedProduct = await stripe.products.update(productId, {
+      active: false,
+    });
 
     return {
       success: true,
@@ -167,7 +170,6 @@ const deleteStripeProduct = async (productId: string) => {
     throw new Error("Failed to delete product");
   }
 };
-
 
 // Create Stripe product
 const createStripeProductPrice = async (
@@ -257,7 +259,6 @@ const createStripeSubscription = async (
   } catch (e: any) {
     console.error("Error creating subscription:", e);
     console.error("Failed subscription stripe function:", e);
-   
   }
 };
 
@@ -346,14 +347,20 @@ const setDefaultPaymentMethod = async (
   paymentMethodId: string
 ) => {
   if (!customerId || !paymentMethodId) {
-    return { success: false, error: "Customer ID and Payment Method ID are required" };
+    return {
+      success: false,
+      error: "Customer ID and Payment Method ID are required",
+    };
   }
 
   try {
     // Optional: validate that this payment method belongs to the customer
     const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
     if (paymentMethod.customer !== customerId) {
-      return { success: false, error: "Payment method does not belong to this customer" };
+      return {
+        success: false,
+        error: "Payment method does not belong to this customer",
+      };
     }
 
     // Update default payment method
@@ -373,7 +380,6 @@ const setDefaultPaymentMethod = async (
     };
   }
 };
-
 
 // Check if payment method belongs to customer
 const verifyPaymentMethodOwnership = async (
@@ -407,10 +413,11 @@ const getAllPaymentMethods = async (customerId: string) => {
 
     // 2️⃣ Get customer object to find default payment method
     const customer = await stripe.customers.retrieve(customerId);
-    const defaultPaymentMethodId = (customer as Stripe.Customer).invoice_settings.default_payment_method;
+    const defaultPaymentMethodId = (customer as Stripe.Customer)
+      .invoice_settings.default_payment_method;
 
     // 3️⃣ Map to clean format
-    const formattedMethods = paymentMethods.data.map(pm => ({
+    const formattedMethods = paymentMethods.data.map((pm) => ({
       id: pm.id,
       brand: pm.card?.brand,
       last4: pm.card?.last4,
@@ -525,7 +532,7 @@ const transferHostEarnings = async (transferData: ITransferAmount) => {
       success: true,
       transfer: {
         id: transfer.id,
-        amount: transfer.amount / 100, 
+        amount: transfer.amount / 100,
         currency: transfer.currency,
         status: transfer.created ? "created" : "failed",
         created: transfer.created,
@@ -545,7 +552,6 @@ const transferHostEarnings = async (transferData: ITransferAmount) => {
     };
   }
 };
-
 
 export const createStripeSubscriptionWithDiscount = async ({
   customerId,
@@ -628,8 +634,208 @@ export const createStripeSubscriptionWithDiscount = async ({
   }
 };
 
+//!web hook handler
+export const stripeWebhookHandler = async (req: any, res: any) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig!,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+  } catch (err: any) {
+    console.error("❌ Webhook signature error:", err.message);
+    return res.status(400).send(`Webhook error: ${err.message}`);
+  }
+
+  // Extract the invoice if applicable
+  const isInvoice = (obj: any): obj is Stripe.Invoice => {
+    return obj.object === "invoice";
+  };
+
+  // ============================================================
+  // 1️⃣ PAYMENT SUCCEEDED (FIRST OR MONTHLY BILLING)
+  // ============================================================
+  if (event.type === "invoice.payment_succeeded") {
+    try {
+      if (!isInvoice(event.data.object)) {
+        return res.json({ received: true }); // invalid structure
+      }
+
+      const invoice = event.data.object as Stripe.Invoice;
+      // FIX 2: customer ID type narrowing
+      const customerId =
+        typeof invoice.customer === "string" ? invoice.customer : null;
+
+      if (!customerId) {
+        console.log("❌ No customer ID in invoice");
+        return res.json({ received: true });
+      }
+
+      const invoiceData = invoice as Stripe.Invoice & { subscription?: string };
+
+      const subscriptionId = invoiceData.subscription || null;
+
+      // Find user by Stripe customer ID
+      const user = await prisma.user.findFirst({
+        where: { stripeCustomerId: customerId },
+      });
+
+      if (!user) return res.json({ received: true });
+
+      // Find user package by subscription ID
+      const userPackage = await prisma.userPackage.findFirst({
+        where: { stripeSubscriptionId: subscriptionId },
+        include: { plan: true },
+      });
+
+      if (!userPackage) return res.json({ received: true });
+
+      // 1) Update paidMonths & remainingMonths
+      const newPaid = userPackage.paidMonths + 1;
+      const newRemaining = Math.max(userPackage.remainingMonths - 1, 0);
+
+      // 2) Update next billing date
+      const nextBillingDate = new Date();
+      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+
+      await prisma.userPackage.update({
+        where: { id: userPackage.id },
+        data: {
+          paidMonths: newPaid,
+          remainingMonths: newRemaining,
+          nextBillingDate,
+          status: "ACTIVE",
+        },
+      });
+
+      // Extract safe paymentMethodId
+      const paymentMethodId =
+        typeof invoice.default_payment_method === "string"
+          ? invoice.default_payment_method
+          : invoice.default_payment_method?.id || "unknown";
+
+      // Create SubscriptionPayment
+      await prisma.subscriptionPayment.create({
+        data: {
+          userId: user.id,
+          planId: userPackage.planId,
+          subscriptionId: subscriptionId || "unknown", // ✔ fixed
+          amount: userPackage.plan.price,
+          paymentMethodId, // ✔ fixed
+          paymentStatus: "COMPLETED",
+          stripePriceId: userPackage.plan.stripePriceId,
+          stripeProductId: userPackage.plan.stripeProductId,
+        },
+      });
+      // 4) EMAIL — After Paying 💌
+      const subject =
+        invoice.billing_reason === "subscription_create"
+          ? "Subscription Activated"
+          : "Monthly Payment Successful";
+
+      const body =
+        invoice.billing_reason === "subscription_create"
+          ? `
+Hi ${user.name},
+
+🎉 Your subscription has been successfully activated!
+
+Plan: ${userPackage.plan.name}
+Amount Paid: $${userPackage.plan.price}
+Next Billing: ${nextBillingDate.toDateString()}
+
+Thank you for your purchase!
+`
+          : `
+Hi ${user.name},
+
+Your monthly subscription payment was successful.
+
+Amount Paid: $${userPackage.plan.price}
+Next Billing: ${nextBillingDate.toDateString()}
+
+Thank you for staying with us!
+`;
+
+      await emailSender(subject, user.email, body);
+
+      return res.json({ received: true });
+    } catch (err) {
+      console.error("❌ Error handling payment success", err);
+      return res.json({ received: true });
+    }
+  }
+
+  // ============================================================
+  // 2️⃣ PAYMENT FAILED
+  // ============================================================
+if (event.type === "invoice.payment_failed") {
+  try {
+    if (!isInvoice(event.data.object)) {
+      return res.json({ received: true });
+    }
+
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId =
+      typeof invoice.customer === "string" ? invoice.customer : null;
+
+    if (!customerId) {
+      return res.json({ received: true });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { stripeCustomerId: customerId },
+    });
+
+    if (user) {
+      await emailSender(
+        "Payment Failed",
+        user.email,
+        `
+Hi ${user.name},
+
+Your monthly subscription payment failed.
+
+Please update your payment method to avoid service interruption.
+
+Thank you.
+        `
+      );
+    }
+
+    return res.json({ received: true });
+  } catch (err) {
+    console.error("❌ Error handling payment failure", err);
+    return res.json({ received: true });
+  }
+}
 
 
+  // ============================================================
+  // 3️⃣ SUBSCRIPTION CANCELED
+  // ============================================================
+  if (event.type === "customer.subscription.deleted") {
+    try {
+      const subscription = event.data.object;
+
+      await prisma.userPackage.updateMany({
+        where: { stripeSubscriptionId: subscription.id },
+        data: { billingStopped: true },
+      });
+
+      return res.json({ received: true });
+    } catch (err) {
+      console.error("❌ Error handling subscription cancelled", err);
+      return res.json({ received: true });
+    }
+  }
+
+  return res.status(200).send("OK");
+};
 
 export const StripeService = {
   createStripeCustomer,
@@ -651,6 +857,5 @@ export const StripeService = {
   verifyPaymentMethodOwnership,
   createHostStripeAccount,
   transferHostEarnings,
-  createStripeSubscriptionWithDiscount
-
+  createStripeSubscriptionWithDiscount,
 };
