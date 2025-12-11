@@ -490,7 +490,7 @@ const createRemainingPaymentInvoice = async (
   };
 };
 
-//!
+// 3. CREATE CRYPTO WITHDRAW REQUEST
 const createCryptoWithdrawRequest = async (
   userPackageId: string,
   userId: string,
@@ -510,10 +510,11 @@ const createCryptoWithdrawRequest = async (
   // 2. Fetch the package
   const pkg = await prisma.userPackage.findUnique({
     where: { id: userPackageId },
-    include: { payoutRequests: true },
+    include: { payoutRequests: true, user: true },
   });
 
   if (!pkg) throw new ApiError(404, "Package not found");
+  console.log(pkg.userId, userId);
   if (pkg.userId !== userId) throw new ApiError(403, "Unauthorized");
 
   // Must have completed all months
@@ -553,6 +554,30 @@ const createCryptoWithdrawRequest = async (
       status: "PAYOUT_PENDING",
     },
   });
+
+  //send email
+  // --------------------------------------------------------
+  // 📧 SEND EMAIL AFTER SUBMITTING PAYOUT DETAILS
+  // --------------------------------------------------------
+  const subject = "Payout Request Received";
+  const body = `
+Hi ${pkg.user.name},
+
+We have received your payout request successfully.
+
+📌 Payout Details:
+- Stablecoin: ${stablecoin}
+- Network: ${network}
+- Wallet Address: ${walletAddress}
+
+Our team will review and approve your payout shortly.
+You will receive another email once the payout is completed.
+
+Thank you,
+M2X Team
+  `;
+
+  await emailSender(subject, pkg.user.email, body);
 
   return {
     message: "Crypto payout request submitted successfully",
@@ -640,6 +665,7 @@ const adminApprovePayout = async (payoutRequestId: string) => {
       userPackage: {
         include: {
           deals: true,
+          user: true,
         },
       },
     },
@@ -655,6 +681,7 @@ const adminApprovePayout = async (payoutRequestId: string) => {
 
   const pkg = payout.userPackage;
   const deal = pkg.deals[0]; // each package has 1 deal
+  const user = pkg.user;
 
   // 2. Approve payout request
   const updatedRequest = await prisma.payoutRequest.update({
@@ -692,6 +719,32 @@ const adminApprovePayout = async (payoutRequestId: string) => {
       },
     });
   }
+
+  // -----------------------------------------------------
+  //  ⭐ EMAIL: AFTER ADMIN APPROVES FINAL PAYOUT
+  // -----------------------------------------------------
+  const subject = "Payout Completed Successfully";
+  const body = `
+Hi ${user.name},
+
+🎉 Your payout has been successfully processed!
+
+Your withdrawal request has been approved and completed by our team.
+
+📌 Details:
+- Package: ${pkg.id}
+- Payout Amount Sent: ${deal?.payoutAmount ?? 0} USD
+- Processed On: ${new Date().toLocaleDateString()}
+
+Your package is now marked as **PAYOUT_COMPLETED**, and all dashboard values have been reset.
+
+If you have any questions, feel free to contact support.
+
+Thank you,
+AhmedHassieb Team
+  `;
+
+  await emailSender(subject, user.email, body);
 
   return {
     message: "Payout approved successfully",
