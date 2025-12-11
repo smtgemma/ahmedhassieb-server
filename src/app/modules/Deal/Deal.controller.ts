@@ -132,6 +132,37 @@ const createRemainingPaymentInvoice = catchAsync(
   }
 );
 
+//createCryptoWithdrawRequest
+const createCryptoWithdrawRequest = catchAsync(
+  async (req: Request, res: Response) => {
+    const userPackageId = req.params.userPackageId;
+    const userId = req.user.id;
+    const result = await DealService.createCryptoWithdrawRequest(
+      userPackageId,
+      userId,
+      req.body
+    );
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Withdraw request created successfully!",
+      data: result,
+    });
+  }
+);
+
+// adminApprovePayout;
+const adminApprovePayout = catchAsync(async (req: Request, res: Response) => {
+  const payoutRequestId = req.params.payoutRequestId;
+  const result = await DealService.adminApprovePayout(payoutRequestId);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Payout approved successfully!",
+    data: result,
+  });
+});
+
 export const DealController = {
   addNewDeal,
   getDealByUserId,
@@ -143,4 +174,7 @@ export const DealController = {
   assignPackageToUser,
   removePackageFromUser,
   createRemainingPaymentInvoice,
+  createCryptoWithdrawRequest,
+  adminApprovePayout
+  
 };

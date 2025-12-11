@@ -4,6 +4,7 @@ import prisma from "../../../shared/prisma";
 import httpStatus from "http-status";
 import stripe from "../../../shared/stripe";
 import { differenceInDays } from "date-fns";
+import Stripe from "stripe";
 
 // Deal.service: Module file for the Deal.service functionality.
 const addNewDeal = async (userId: string, planId: string, dealId: string) => {
@@ -11,39 +12,31 @@ const addNewDeal = async (userId: string, planId: string, dealId: string) => {
   // const isPlanExist = await prisma.subscriptionPlan.findUnique({
   //   where: { id: planId },
   // });
-
   // if (!isPlanExist) {
   //   throw new ApiError(httpStatus.NOT_FOUND, "Plan not found");
   // }
-
   // // check user exists
   // const isUserExist = await prisma.user.findUnique({
   //   where: { id: userId },
   // });
-
   // if (!isUserExist) {
   //   throw new ApiError(httpStatus.NOT_FOUND, "User not found");
   // }
-
   // // get deal
   // const deal = await prisma.deal.findUnique({
   //   where: { id: dealId },
   // });
-
   // if (!deal) {
   //   throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
   // }
-
   // // planId is stored as array of strings
   // const alreadyAdded = deal.planId.includes(planId);
-
   // if (alreadyAdded) {
   //   throw new ApiError(
   //     httpStatus.BAD_REQUEST,
   //     "Plan already added to this deal"
   //   );
   // }
-
   // // update deal with new planId
   // const result = await prisma.deal.update({
   //   where: { id: dealId },
@@ -53,7 +46,6 @@ const addNewDeal = async (userId: string, planId: string, dealId: string) => {
   //     },
   //   },
   // });
-
   // return result;
 };
 
@@ -74,7 +66,6 @@ const getDealByUserId = async (userId: string) => {
   //     },
   //   },
   // });
-
   // return {
   //   ...deal,
   //   plans, // add full plan objects
@@ -88,11 +79,9 @@ const updateDeal = async (payload: any) => {
   //     userId: payload.userId,
   //   },
   // });
-
   // if (!deal) {
   //   throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
   // }
-
   // const result = await prisma.deal.update({
   //   where: {
   //     id: payload.dealId,
@@ -105,7 +94,6 @@ const updateDeal = async (payload: any) => {
   //     tokens: payload.tokens || deal.tokens,
   //   },
   // });
-
   // return result;
 };
 
@@ -115,11 +103,9 @@ const resetDeal = async (dealId: string) => {
   //     id: dealId,
   //   },
   // });
-
   // if (!isDealExist) {
   //   throw new ApiError(httpStatus.NOT_FOUND, "Deal not found");
   // }
-
   // const result = await prisma.deal.update({
   //   where: {
   //     id: dealId,
@@ -413,7 +399,7 @@ const calculateRemaining = async (userPackageId: string, userId: string) => {
   };
 };
 
-//! 2. CREATE REMAINING PAYMENT INVOICE
+// 2. CREATE REMAINING PAYMENT INVOICE
 const createRemainingPaymentInvoice = async (
   userPackageId: string,
   userId: string
@@ -427,7 +413,7 @@ const createRemainingPaymentInvoice = async (
   if (pkg.userId !== userId)
     throw new ApiError(httpStatus.FORBIDDEN, "Unauthorized");
 
-  const monthlyPrice = pkg.plan.price ;
+  const monthlyPrice = pkg.plan.price;
   const remainingAmount = monthlyPrice * pkg.remainingMonths;
 
   const tokens = pkg.tokens;
@@ -438,7 +424,21 @@ const createRemainingPaymentInvoice = async (
     throw new ApiError(httpStatus.BAD_REQUEST, "No remaining amount to pay");
   }
 
-  // Deduct tokens for THIS package only
+  // 🔎 1. Retrieve Stripe customer and default payment method
+  const customer = (await stripe.customers.retrieve(
+    pkg.user.stripeCustomerId!
+  )) as Stripe.Customer;
+  const defaultPaymentMethod =
+    customer.invoice_settings?.default_payment_method;
+
+  if (!defaultPaymentMethod) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      "No saved card found. Please add a payment method."
+    );
+  }
+
+  // 🧮 2. Deduct tokens immediately
   await prisma.userPackage.update({
     where: { id: pkg.id },
     data: {
@@ -446,23 +446,19 @@ const createRemainingPaymentInvoice = async (
     },
   });
 
-  // Create Stripe invoice item
-  await stripe.invoiceItems.create({
+  // ⚡ 3. Instant payment (PaymentIntent)
+  const paymentIntent = await stripe.paymentIntents.create({
     customer: pkg.user.stripeCustomerId!,
+    payment_method:
+      typeof defaultPaymentMethod === "string"
+        ? defaultPaymentMethod
+        : defaultPaymentMethod?.id,
     amount: Math.round(finalAmount * 100),
     currency: "usd",
     description: "Remaining balance before payout",
-    metadata: {
-      userPackageId,
-      reason: "remaining_payment",
-    },
-  });
-
-  // Create invoice
-  const invoice = await stripe.invoices.create({
-    customer: pkg.user.stripeCustomerId!,
-    collection_method: "charge_automatically",
-    auto_advance: true,
+    off_session: true,
+    confirm: true,
+    automatic_payment_methods: { enabled: true },
     metadata: {
       userPackageId,
       reason: "remaining_payment",
@@ -470,228 +466,239 @@ const createRemainingPaymentInvoice = async (
     },
   });
 
+  // 📌 4. Update package if payment successful
+  if (paymentIntent.status === "succeeded") {
+    await prisma.userPackage.update({
+      where: { id: pkg.id },
+      data: {
+        paidMonths: 12,
+        remainingMonths: 0,
+        billingStopped: true,
+        refundStopped: true,
+        status: "PAYOUT_PENDING",
+      },
+    });
+  }
+
   return {
-    message: "Invoice created. Stripe will auto-charge.",
-    invoiceId: invoice.id,
-    remainingAmount,
-    tokensUsed: discount,
+    message: "Payment completed instantly.",
+    paymentIntentId: paymentIntent.id,
+    paymentStatus: paymentIntent.status,
     finalAmount,
+    tokensUsed: discount,
+    remainingAmount,
   };
 };
 
- const createCryptoWithdrawRequest = async (
-   userPackageId: string,
-   userId: string,
-   payload: any
- ) => {
-   const { stablecoin, network, walletAddress, confirmWalletAddress, agreed } =
-     payload;
+//!
+const createCryptoWithdrawRequest = async (
+  userPackageId: string,
+  userId: string,
+  payload: any
+) => {
+  const { stablecoin, network, walletAddress, confirmWalletAddress, agreed } =
+    payload;
 
-   // 1. Validate required fields
-   if (!stablecoin) throw new ApiError(400, "Stablecoin is required");
-   if (!network) throw new ApiError(400, "Network is required");
-   if (!walletAddress) throw new ApiError(400, "Wallet address is required");
-   if (walletAddress !== confirmWalletAddress)
-     throw new ApiError(400, "Wallet addresses do not match");
-   if (!agreed) throw new ApiError(400, "You must confirm the wallet address");
+  // 1. Validate required fields
+  if (!stablecoin) throw new ApiError(400, "Stablecoin is required");
+  if (!network) throw new ApiError(400, "Network is required");
+  if (!walletAddress) throw new ApiError(400, "Wallet address is required");
+  if (walletAddress !== confirmWalletAddress)
+    throw new ApiError(400, "Wallet addresses do not match");
+  if (!agreed) throw new ApiError(400, "You must confirm the wallet address");
 
-   // 2. Fetch the package
-   const pkg = await prisma.userPackage.findUnique({
-     where: { id: userPackageId },
-     include: { payoutRequests: true },
-   });
+  // 2. Fetch the package
+  const pkg = await prisma.userPackage.findUnique({
+    where: { id: userPackageId },
+    include: { payoutRequests: true },
+  });
 
-   if (!pkg) throw new ApiError(404, "Package not found");
-   if (pkg.userId !== userId) throw new ApiError(403, "Unauthorized");
+  if (!pkg) throw new ApiError(404, "Package not found");
+  if (pkg.userId !== userId) throw new ApiError(403, "Unauthorized");
 
-   // Must have completed all months
-   if (pkg.remainingMonths > 0) {
-     throw new ApiError(400, "You must complete all monthly payments first");
-   }
+  // Must have completed all months
+  if (pkg.remainingMonths > 0) {
+    throw new ApiError(400, "You must complete all monthly payments first");
+  }
 
-   // Must be payout eligible
-   if (pkg.status !== "PAYOUT_PENDING") {
-     throw new ApiError(400, "This package is not eligible for payout");
-   }
+  // Must be payout eligible
+  if (pkg.status !== "PAYOUT_PENDING") {
+    throw new ApiError(400, "This package is not eligible for payout");
+  }
 
-   // Prevent multiple payout requests
-   const existing = pkg.payoutRequests.find((r) => !r.processedAt);
-   if (existing) throw new ApiError(400, "Payout request already submitted");
+  // Prevent multiple payout requests
+  const existing = pkg.payoutRequests.find((r) => !r.processedAt);
+  if (existing) throw new ApiError(400, "Payout request already submitted");
 
-   // 3. Build extraInfo object
-   const extraInfo = {
-     stablecoin,
-     network,
-   };
-
-   // 4. Create the payout request
-   const payout = await prisma.payoutRequest.create({
-     data: {
-       userPackageId,
-       walletAddress,
-       extraInfo: JSON.stringify(extraInfo),
-       approved: false,
-     },
-   });
-
-   // 5. Keep status as PAYOUT_PENDING
-   await prisma.userPackage.update({
-     where: { id: userPackageId },
-     data: {
-       status: "PAYOUT_PENDING",
-     },
-   });
-
-   return {
-     message: "Crypto payout request submitted successfully",
-     payout,
-   };
- };
-
-  export const runRefundCronJob = async () => {
-    console.log("🔄 Running Updated Refund Cron Job...");
-
-    try {
-      const packages = await prisma.userPackage.findMany({
-        where: {
-          status: "ACTIVE",
-          refundStopped: false,
-        },
-        include: {
-          plan: true,
-          refunds: true,
-        },
-      });
-
-      if (!packages.length) {
-        console.log("ℹ️ No eligible packages found for refund.");
-        return;
-      }
-
-      // Updated refund percentages
-      const milestones = [
-        { day: 90, enum: "DAY_90", percent: 15 },
-        { day: 180, enum: "DAY_180", percent: 20 },
-        { day: 270, enum: "DAY_270", percent: 15 },
-        { day: 360, enum: "DAY_360", percent: 50 },
-      ];
-
-      for (const pkg of packages) {
-        const daysPassed = differenceInDays(
-          new Date(),
-          new Date(pkg.startDate)
-        );
-
-        for (const ms of milestones) {
-          if (daysPassed >= ms.day) {
-            const alreadyRefunded = pkg.refunds.some(
-              (r) => r.milestone === ms.enum
-            );
-
-            if (alreadyRefunded) continue;
-
-            const tokenAmount = (pkg.plan.price * ms.percent) / 100;
-
-            // Create refund log
-            await prisma.refundLog.create({
-              data: {
-                userPackageId: pkg.id,
-                milestone: ms.enum as any,
-                percent: ms.percent,
-                amount: tokenAmount,
-              },
-            });
-
-            // Update only tokens
-            await prisma.userPackage.update({
-              where: { id: pkg.id },
-              data: {
-                tokens: pkg.tokens + tokenAmount,
-              },
-            });
-
-            console.log(
-              `✅ Refund applied for package ${pkg.id} → ${ms.enum}: +${tokenAmount} tokens`
-            );
-          }
-        }
-      }
-
-      console.log("🎉 Updated Refund Cron Completed.");
-    } catch (error) {
-      console.error("❌ Updated Refund Cron Error:", error);
-    }
+  // 3. Build extraInfo object
+  const extraInfo = {
+    stablecoin,
+    network,
   };
 
+  // 4. Create the payout request
+  const payout = await prisma.payoutRequest.create({
+    data: {
+      userPackageId,
+      walletAddress,
+      extraInfo: JSON.stringify(extraInfo),
+      approved: false,
+    },
+  });
+
+  // 5. Keep status as PAYOUT_PENDING
+  await prisma.userPackage.update({
+    where: { id: userPackageId },
+    data: {
+      status: "PAYOUT_PENDING",
+    },
+  });
+
+  return {
+    message: "Crypto payout request submitted successfully",
+    payout,
+  };
+};
+
+export const runRefundCronJob = async () => {
+  console.log("🔄 Running Updated Refund Cron Job...");
+
+  try {
+    const packages = await prisma.userPackage.findMany({
+      where: {
+        status: "ACTIVE",
+        refundStopped: false,
+      },
+      include: {
+        plan: true,
+        refunds: true,
+      },
+    });
+
+    if (!packages.length) {
+      console.log("ℹ️ No eligible packages found for refund.");
+      return;
+    }
+
+    // Updated refund percentages
+    const milestones = [
+      { day: 90, enum: "DAY_90", percent: 15 },
+      { day: 180, enum: "DAY_180", percent: 20 },
+      { day: 270, enum: "DAY_270", percent: 15 },
+      { day: 360, enum: "DAY_360", percent: 50 },
+    ];
+
+    for (const pkg of packages) {
+      const daysPassed = differenceInDays(new Date(), new Date(pkg.startDate));
+
+      for (const ms of milestones) {
+        if (daysPassed >= ms.day) {
+          const alreadyRefunded = pkg.refunds.some(
+            (r) => r.milestone === ms.enum
+          );
+
+          if (alreadyRefunded) continue;
+
+          const tokenAmount = (pkg.plan.price * ms.percent) / 100;
+
+          // Create refund log
+          await prisma.refundLog.create({
+            data: {
+              userPackageId: pkg.id,
+              milestone: ms.enum as any,
+              percent: ms.percent,
+              amount: tokenAmount,
+            },
+          });
+
+          // Update only tokens
+          await prisma.userPackage.update({
+            where: { id: pkg.id },
+            data: {
+              tokens: pkg.tokens + tokenAmount,
+            },
+          });
+
+          console.log(
+            `✅ Refund applied for package ${pkg.id} → ${ms.enum}: +${tokenAmount} tokens`
+          );
+        }
+      }
+    }
+
+    console.log("🎉 Updated Refund Cron Completed.");
+  } catch (error) {
+    console.error("❌ Updated Refund Cron Error:", error);
+  }
+};
 
 const adminApprovePayout = async (payoutRequestId: string) => {
-     // 1. Fetch payout request
-     const payout = await prisma.payoutRequest.findUnique({
-       where: { id: payoutRequestId },
-       include: {
-         userPackage: {
-           include: {
-             deals: true,
-           },
-         },
-       },
-     });
+  // 1. Fetch payout request
+  const payout = await prisma.payoutRequest.findUnique({
+    where: { id: payoutRequestId },
+    include: {
+      userPackage: {
+        include: {
+          deals: true,
+        },
+      },
+    },
+  });
 
-     if (!payout) {
-       throw new ApiError(httpStatus.NOT_FOUND, "Payout request not found");
-     }
+  if (!payout) {
+    throw new ApiError(httpStatus.NOT_FOUND, "Payout request not found");
+  }
 
-     if (payout.approved) {
-       throw new ApiError(httpStatus.BAD_REQUEST, "Payout already approved");
-     }
+  if (payout.approved) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "Payout already approved");
+  }
 
-     const pkg = payout.userPackage;
-     const deal = pkg.deals[0]; // each package has 1 deal
+  const pkg = payout.userPackage;
+  const deal = pkg.deals[0]; // each package has 1 deal
 
-     // 2. Approve payout request
-     const updatedRequest = await prisma.payoutRequest.update({
-       where: { id: payoutRequestId },
-       data: {
-         approved: true,
-         processedAt: new Date(),
-       },
-     });
+  // 2. Approve payout request
+  const updatedRequest = await prisma.payoutRequest.update({
+    where: { id: payoutRequestId },
+    data: {
+      approved: true,
+      processedAt: new Date(),
+    },
+  });
 
-     // 3. Reset & Lock package after payout
-     const updatedPackage = await prisma.userPackage.update({
-       where: { id: pkg.id },
-       data: {
-         status: "PAYOUT_COMPLETED",
-         tokens: 0,
-         payoutAmount: 0,
-         refundStopped: true,
-         billingStopped: true,
-         remainingMonths: 0,
-         paidMonths: pkg.paidMonths, // keep old value
-       },
-     });
+  // 3. Reset & Lock package after payout
+  const updatedPackage = await prisma.userPackage.update({
+    where: { id: pkg.id },
+    data: {
+      status: "PAYOUT_COMPLETED",
+      tokens: 0,
+      payoutAmount: 0,
+      refundStopped: true,
+      billingStopped: true,
+      remainingMonths: 0,
+      paidMonths: pkg.paidMonths, // keep old value
+    },
+  });
 
-     // 4. Reset deal metrics
-     if (deal) {
-       await prisma.deal.update({
-         where: { id: deal.id },
-         data: {
-           activeDeals: 0,
-           completedDeals: 0,
-           tokens: 0,
-           payoutAmount: 0,
-           payoutDate: new Date(),
-         },
-       });
-     }
+  // 4. Reset deal metrics
+  if (deal) {
+    await prisma.deal.update({
+      where: { id: deal.id },
+      data: {
+        activeDeals: 0,
+        completedDeals: 0,
+        tokens: 0,
+        payoutAmount: 0,
+        payoutDate: new Date(),
+      },
+    });
+  }
 
-     return {
-       message: "Payout approved successfully",
-       payoutRequest: updatedRequest,
-       userPackage: updatedPackage,
-     };
-   };
-
+  return {
+    message: "Payout approved successfully",
+    payoutRequest: updatedRequest,
+    userPackage: updatedPackage,
+  };
+};
 
 // Exporting the Deal.service module.
 export const DealService = {
@@ -705,4 +712,6 @@ export const DealService = {
   assignPackageToUser,
   removePackageFromUser,
   createRemainingPaymentInvoice,
+  createCryptoWithdrawRequest,
+  adminApprovePayout,
 };

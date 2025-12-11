@@ -22,6 +22,20 @@ router.delete(
   DealController.removePackageFromUser
 );
 
+//createCryptoWithdrawRequest
+router.post(
+  "/create-crypto-withdraw-request/:userPackageId",
+  auth(),
+  DealController.createCryptoWithdrawRequest
+);
+
+//adminApprovePayout
+router.put(
+  "/admin-approve-payout/:payoutRequestId",
+  // auth(),
+  DealController.adminApprovePayout
+);
+
 //createRemainingPaymentInvoice
 router.post(
   "/create-remaining-payment-invoice",
