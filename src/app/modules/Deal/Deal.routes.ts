@@ -8,7 +8,7 @@ import auth from "../../middlewares/auth";
 const router = express.Router();
 
 //getUserDashboard
-router.get("/user-dashboard", auth(), DealController.getUserDashboard);
+router.get("/user-dashboard/:userId", DealController.getUserDashboard);
 
 //updateDashboard
 router.put("/dashboard/:userPackageId", DealController.updateDashboard);

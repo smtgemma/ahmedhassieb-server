@@ -143,6 +143,7 @@ const getUserDashboard = async (userId: string) => {
     include: {
       plan: true,
       deals: true,
+      user: true,
     },
   });
 
@@ -160,7 +161,7 @@ const getUserDashboard = async (userId: string) => {
       payoutDate: null,
     };
 
-    const monthlyPrice = pkg.plan.price; 
+    const monthlyPrice = pkg.plan.price;
     const remainingAmountBeforeToken = monthlyPrice * pkg.remainingMonths;
 
     const remainingPayable = Math.max(
@@ -181,6 +182,8 @@ const getUserDashboard = async (userId: string) => {
         planMonthlyPrice: pkg.plan.price,
         remainingPayable,
       },
+
+      user: userPackages[0].user,
 
       dashboard: {
         activeDeals: deal.activeDeals,

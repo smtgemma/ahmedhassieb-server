@@ -66,7 +66,7 @@ const sendEmailToUser = catchAsync(async (req: Request, res: Response) => {
 
 // getUserDashboard;
 const getUserDashboard = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.params.userId;
   const result = await DealService.getUserDashboard(userId);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -175,6 +175,5 @@ export const DealController = {
   removePackageFromUser,
   createRemainingPaymentInvoice,
   createCryptoWithdrawRequest,
-  adminApprovePayout
-  
+  adminApprovePayout,
 };
