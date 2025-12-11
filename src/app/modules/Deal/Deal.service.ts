@@ -160,6 +160,14 @@ const getUserDashboard = async (userId: string) => {
       payoutDate: null,
     };
 
+    const monthlyPrice = pkg.plan.price; 
+    const remainingAmountBeforeToken = monthlyPrice * pkg.remainingMonths;
+
+    const remainingPayable = Math.max(
+      remainingAmountBeforeToken - deal.tokens,
+      0
+    );
+
     return {
       packageDetails: {
         userPackageId: pkg.id,
@@ -170,7 +178,8 @@ const getUserDashboard = async (userId: string) => {
         paidMonths: pkg.paidMonths,
         remainingMonths: pkg.remainingMonths,
         planPrice: pkg.plan.price,
-        planMonthlyPrice: pkg.plan.price ,
+        planMonthlyPrice: pkg.plan.price,
+        remainingPayable,
       },
 
       dashboard: {
