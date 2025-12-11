@@ -7,6 +7,7 @@ import stripe from "../../../shared/stripe";
 import { StripeService } from "../Stripe/Stripe.service";
 import httpStatus from "http-status";
 import { subscriptionPaymentSearchAbleFields } from "./SubscriptionPayment.constant";
+import emailSender from "../../../shared/emailSernder";
 
 const createSubscriptionPayment = async (payload: any, userId: string) => {
   // -------------------------------
@@ -156,6 +157,20 @@ const createSubscriptionPayment = async (payload: any, userId: string) => {
       status: "SUCCESS",
     },
   });
+
+  //send email
+  const subject =  "Payment Successful – Subscription Activated"
+      const body = `
+Hi ${user.name},
+
+🎉 Your subscription has been successfully activated!
+
+You can now access your package and start using the platform.
+
+Best regards,  
+M2X Team
+`
+await emailSender(subject, user.email, body);
 
   return {
     message: "Subscription successful",
