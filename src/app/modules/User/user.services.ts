@@ -9,6 +9,7 @@ import { userSearchAbleFields } from "./user.costant";
 import config from "../../../config";
 import httpStatus from "http-status";
 import { StripeService } from "../Stripe/Stripe.service";
+import emailSender from "../../../shared/emailSernder";
 
 // Create a new user in the database.
 const createUserIntoDb = async (payload: User) => {
@@ -37,13 +38,25 @@ const createUserIntoDb = async (payload: User) => {
       "Failed to create user profile"
     );
 
-  // const deal = await prisma.deal.create({
-  //   data: {
-  //     userId: result.id,
-  //   },
-  // });
+  // -----------------------------------------------
+  // 📧 SEND EMAIL AFTER SUCCESSFUL REGISTRATION
+  // -----------------------------------------------
+  const subject = "Welcome to M2X!";
+  const body = `
+    Hi ${result.name},
 
-  // 🔹 Create Stripe customer but don’t wait for it
+    Welcome to M2X 🎉  
+    Your account has been successfully created.
+
+    You can now log in and explore your dashboard.
+
+    Regards,
+    M2X Team
+  `;
+
+  await emailSender(subject, result.email, body);
+
+  // create stripe customer
   (async () => {
     try {
       const stripeCustomer = await StripeService.createStripeCustomer({
