@@ -170,7 +170,7 @@ const getUserDashboard = async (userId: string) => {
         paidMonths: pkg.paidMonths,
         remainingMonths: pkg.remainingMonths,
         planPrice: pkg.plan.price,
-        planMonthlyPrice: pkg.plan.price / 12,
+        planMonthlyPrice: pkg.plan.price ,
       },
 
       dashboard: {
