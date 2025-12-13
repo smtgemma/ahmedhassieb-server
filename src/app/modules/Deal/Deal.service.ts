@@ -765,6 +765,61 @@ AhmedHassieb Team
   };
 };
 
+
+
+
+ const getDashboardAnalyticsService = async () => {
+   const [revenueAgg, activeDeals, totalUsers, packagesSold] =
+     await Promise.all([
+       // 💰 Total Revenue (net)
+       prisma.subscriptionPayment.aggregate({
+         _sum: {
+           amount: true,
+           refundedAmount: true,
+         },
+         where: {
+           paymentStatus: "COMPLETED",
+         },
+       }),
+
+       // 📦 Active Deals
+       prisma.deal.count({
+         where: {
+           activeDeals: {
+             gt: 0,
+           },
+         },
+       }),
+
+       // 👤 Total Active Users
+       prisma.user.count({
+         where: {
+           status: "ACTIVE",
+         },
+       }),
+
+       // 📊 Packages Sold
+       prisma.userPackage.count({
+         where: {
+           status: {
+             in: ["ACTIVE", "COMPLETED", "PAYOUT_PENDING", "PAYOUT_COMPLETED"],
+           },
+         },
+       }),
+     ]);
+
+   const totalRevenue =
+     (revenueAgg._sum.amount ?? 0) - (revenueAgg._sum.refundedAmount ?? 0);
+
+   return {
+     totalRevenue,
+     activeDeals,
+     totalUsers,
+     packagesSold,
+   };
+ };
+
+
 // Exporting the Deal.service module.
 export const DealService = {
   addNewDeal,
@@ -779,4 +834,5 @@ export const DealService = {
   createRemainingPaymentInvoice,
   createCryptoWithdrawRequest,
   adminApprovePayout,
+  getDashboardAnalyticsService,
 };

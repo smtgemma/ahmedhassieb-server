@@ -16,6 +16,12 @@ router.put("/dashboard/:userPackageId", DealController.updateDashboard);
 //assignPackageToUser
 router.post("/assign-package-to-user", DealController.assignPackageToUser);
 
+//getDashboardAnalyticsService
+router.get(
+  "/dashboard-analytics-service",
+  DealController.getDashboardAnalyticsService
+);
+
 //removePackageFromUser
 router.delete(
   "/remove-package-from-user/:userPackageId",

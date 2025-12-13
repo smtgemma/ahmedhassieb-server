@@ -163,6 +163,18 @@ const adminApprovePayout = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+// getDashboardAnalyticsService;
+const getDashboardAnalyticsService = catchAsync(async (req: Request, res: Response) => {
+  const result = await DealService.getDashboardAnalyticsService();
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Dashboard analytics retrieved successfully!",
+    data: result,
+  });
+});
+
 export const DealController = {
   addNewDeal,
   getDealByUserId,
@@ -176,4 +188,5 @@ export const DealController = {
   createRemainingPaymentInvoice,
   createCryptoWithdrawRequest,
   adminApprovePayout,
+  getDashboardAnalyticsService,
 };
