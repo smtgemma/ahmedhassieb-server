@@ -16,6 +16,7 @@ model User {
   stripeCustomerId     String?
   password             String?
   lastLoginAt          DateTime?
+  isDeleted            Boolean?              @default(false)
   isTermsAccepted      Boolean?              @default(false)
   role                 UserRole              @default(USER)
   status               UserStatus            @default(ACTIVE)
@@ -152,8 +153,8 @@ model Deal {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  userPackage    UserPackage   @relation(fields: [userPackageId], references: [id])
-  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  userPackage    UserPackage   @relation(fields: [userPackageId], references: [id], onDelete: Cascade)
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   users           UserDeal[]
 
@@ -186,7 +187,7 @@ model RefundLog {
   amount         Float
   createdAt      DateTime         @default(now())
 
-  userPackage    UserPackage      @relation(fields: [userPackageId], references: [id])
+  userPackage    UserPackage      @relation(fields: [userPackageId], references: [id], onDelete: Cascade)
 }
 
 //
@@ -203,7 +204,7 @@ model BillingLog {
   status          BillingStatus
   createdAt       DateTime       @default(now())
 
-  userPackage     UserPackage    @relation(fields: [userPackageId], references: [id])
+  userPackage     UserPackage    @relation(fields: [userPackageId], references: [id], onDelete: Cascade)
 }
 
 //
@@ -223,7 +224,7 @@ model PayoutRequest {
   processedAt    DateTime?
   createdAt      DateTime     @default(now())
 
-  userPackage    UserPackage  @relation(fields: [userPackageId], references: [id])
+  userPackage    UserPackage  @relation(fields: [userPackageId], references: [id], onDelete: Cascade)
 }
 
 

@@ -108,7 +108,7 @@ const getUsersFromDb = async (
       })),
     });
   }
-  const whereConditions: Prisma.UserWhereInput = { AND: andConditions };
+  const whereConditions: Prisma.UserWhereInput = { AND: andConditions,isDeleted: false };
 
   const result = await prisma.user.findMany({
     where: whereConditions,
@@ -234,6 +234,22 @@ const updateUserIntoDb = async (payload: IUser, id: string) => {
   return result;
 };
 
+//delete user
+const deleteUserIntoDb = async (id: string) => {
+  const result = await prisma.user.update({
+    where: {
+      id: id,
+    },
+    data: {
+      isDeleted: true,
+    },
+  });
+  if (!result) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
+  return result;
+};
+
 export const userService = {
   createUserIntoDb,
   getUsersFromDb,
@@ -241,4 +257,5 @@ export const userService = {
   updateProfile,
   updateUserIntoDb,
   getMyProfile,
+  deleteUserIntoDb,
 };

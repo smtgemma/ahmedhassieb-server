@@ -795,6 +795,7 @@ AhmedHassieb Team
        prisma.user.count({
          where: {
            status: "ACTIVE",
+           isDeleted:false
          },
        }),
 

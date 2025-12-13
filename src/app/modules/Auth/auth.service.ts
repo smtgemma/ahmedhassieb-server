@@ -23,6 +23,10 @@ const loginUser = async (payload: { email: string; password: string }) => {
     );
   }
 
+  if (userData.isDeleted) {
+    throw new ApiError(httpStatus.BAD_REQUEST, "User not found!");
+  }
+
   const isCorrectPassword: boolean = await bcrypt.compare(
     payload.password,
     userData.password!
@@ -43,8 +47,6 @@ const loginUser = async (payload: { email: string; password: string }) => {
 
   return { token: accessToken };
 };
-
-
 
 // Google login
 const googleLogin = async (payload: {
