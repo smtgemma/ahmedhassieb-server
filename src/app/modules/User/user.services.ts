@@ -168,7 +168,14 @@ const getMyProfile = async (userId: string) => {
     },
   });
 
-  return userProfile;
+  const totalTokensData = await prisma.userPackage.aggregate({
+    _sum: { tokens: true },
+    where: { userId },
+  });
+
+  const totalTokens = totalTokensData._sum.tokens || 0;
+
+  return { ...userProfile, totalTokens };
 };
 
 // update profile by user won profile uisng token or email and id
